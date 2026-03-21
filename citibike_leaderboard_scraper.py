@@ -123,12 +123,22 @@ def write_db(path, rows: list, date_str, time_str):
 
 
 # ── Google Sheets ──────────────────────────────────────────────────────────────
+import json
+
 def write_gsheet(rows: list, date_str, time_str):
-    gc = gspread.service_account(filename=CREDENTIALS_PATH)
+    creds_json = os.environ.get("GOOGLE_CREDS")
+    if not creds_json:
+        raise ValueError("GOOGLE_CREDS not set")
+
+    creds_dict = json.loads(creds_json)
+    gc = gspread.service_account_from_dict(creds_dict)
+
     sh = gc.open_by_key(SHEET_ID)
     ws = sh.sheet1
+
     if not ws.get_all_values():
         ws.append_row(CSV_HEADERS)
+
     for row in rows:
         ws.append_row([date_str, time_str, row["rank"], row["id"], row["points"]])
 
