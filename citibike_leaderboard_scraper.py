@@ -91,6 +91,7 @@ def parse_leaderboard(html, target_id, top_n=10):
                         break
 
     print(f"Parsed {len(results)} riders")
+    print("Using credentials:", CREDENTIALS_PATH)
     return results
 
 # ── CSV ────────────────────────────────────────────────────────────────────────
