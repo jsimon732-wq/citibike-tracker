@@ -141,32 +141,24 @@ def write_db(rows, date_str, time_str):
     print("Database updated")
 
 # ── Google Sheets ──────────────────────────────────────────────────────────────
-def write_gsheet(rows, date_str, time_str):
-    print("Writing to Google Sheets...")
+def write_gsheet(rows: list, date_str, time_str):
+    creds_json = os.environ.get("GOOGLE_CREDS")
+    if not creds_json:
+        raise ValueError("GOOGLE_CREDS not set")
 
-    if not CREDENTIALS_PATH or not os.path.exists(CREDENTIALS_PATH):
-        raise RuntimeError(f"Credentials file not found: {CREDENTIALS_PATH}")
+    creds_dict = json.loads(creds_json)
+    gc = gspread.service_account_from_dict(creds_dict)
 
-    if not SHEET_ID:
-        raise RuntimeError("SHEET_ID not set")
-
-    gc = gspread.service_account(filename=CREDENTIALS_PATH)
     sh = gc.open_by_key(SHEET_ID)
+    print("Sheet title:", sh.title)  # ✅ PUT IT HERE
+
     ws = sh.sheet1
 
     if not ws.get_all_values():
         ws.append_row(CSV_HEADERS)
 
     for row in rows:
-        ws.append_row([
-            date_str,
-            time_str,
-            row["rank"],
-            row["id"],
-            row["points"]
-        ])
-
-    print("Google Sheets updated")
+        ws.append_row([date_str, time_str, row["rank"], row["id"], row["points"]])
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 def main():
