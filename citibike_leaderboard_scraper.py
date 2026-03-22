@@ -8,6 +8,7 @@ import os
 import gspread
 from bs4 import BeautifulSoup
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 URL = "https://account.citibikenyc.com/bike-angels/leaderboard"
@@ -156,7 +157,7 @@ def write_gsheet(rows: list, date_str, time_str):
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 def main():
-    now = datetime.now()
+    now = datetime.now(ZoneInfo("America/New_York"))
     date_str = now.strftime("%B %d, %Y")
     time_str = now.strftime("%-I:%M%p").lower()
 
