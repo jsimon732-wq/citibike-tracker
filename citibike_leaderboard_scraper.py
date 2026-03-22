@@ -92,7 +92,6 @@ def parse_leaderboard(html, target_id, top_n=10):
 
     print(f"Parsed {len(results)} riders")
     print("Using credentials:", CREDENTIALS_PATH)
-    print("Sheet title:", sh.title)
     return results
 
 # ── CSV ────────────────────────────────────────────────────────────────────────
@@ -142,15 +141,10 @@ def write_db(rows, date_str, time_str):
 
 # ── Google Sheets ──────────────────────────────────────────────────────────────
 def write_gsheet(rows: list, date_str, time_str):
-    creds_json = os.environ.get("GOOGLE_CREDS")
-    if not creds_json:
-        raise ValueError("GOOGLE_CREDS not set")
-
-    creds_dict = json.loads(creds_json)
-    gc = gspread.service_account_from_dict(creds_dict)
+    gc = gspread.service_account(filename=CREDENTIALS_PATH)
 
     sh = gc.open_by_key(SHEET_ID)
-    print("Sheet title:", sh.title)  # ✅ PUT IT HERE
+    print("Sheet title:", sh.title)  # ✅ ONLY here
 
     ws = sh.sheet1
 
