@@ -1,6 +1,6 @@
 # citi_leaderboard.py
 """
-Bike Angels leaderboard helpers for PV758 and NS143 comparison.
+Bike Angels leaderboard helpers for standard metrics layout and legend toggling.
 
 Uses the same page and parsing approach as citibike_leaderboard_scraper.py.
 Requires: pip install requests beautifulsoup4
@@ -18,7 +18,6 @@ from bs4 import BeautifulSoup
 
 LEADERBOARD_URL = "https://account.citibikenyc.com/bike-angels/leaderboard"
 TARGET_RIDER_ID = "PV758"
-# NEW: Define comparison target ID
 COMPARISON_TARGET_ID = "NS143" 
 USER_AGENT = "RideOnPV758/1.0 (+mailto:jsimon732@gmail.com)"
 
@@ -30,9 +29,14 @@ class LeaderboardSnapshot:
     first_place_points: int
     points_behind_first: int
     fetched_at: str
-    # NEW/UPDATED: Placeholder for distinct NS143 data
-    ns143_points: int | None = None
-    ns143_rank: int | None = None
+    
+    # ---------------------------------------------------------
+    # 1. NEW/UPDATED: Fields for standard NS143 metrics layout
+    # ---------------------------------------------------------
+    # Contains the point difference or the fallback message
+    ns143_diff_str: str | None = None
+    # Contains the hex color code for the value
+    ns143_color: str = "#e4e4e4" # Default Gray
 
 
 def fetch_leaderboard_html() -> str:
@@ -140,23 +144,33 @@ def snapshot_pv758() -> LeaderboardSnapshot | None:
     behind = max(0, first_pts - tgt_pts)
 
     # ---------------------------------------------------------
-    # NEW/UPDATED Logic for NS143 boundary check (Top 10)
+    # 2. UPDATED: Prepare standard metric values for NS143
     # ---------------------------------------------------------
-    ns_points = None
-    ns_rank = None
-    # Boundary is Top 10
+    ns_diff_str = None
+    ns_color = "#e4e4e4" # Gray
+    
     NS143_BOUNDARY = 10 
     
-    # 1. NEW: Look for NS143 in the standard table rows (Top N results)
     ns_target = by_id.get(COMPARISON_TARGET_ID)
     
-    # If found, check if their rank qualifies for the Top 10 comparison
+    # If found, check boundary limit
     if ns_target and isinstance(ns_target.get("rank"), int) and ns_target["rank"] <= NS143_BOUNDARY:
-        ns_points = int(ns_target["points"])
-        ns_rank = ns_target["rank"]
+        # Calculate standard point difference
+        diff = tgt_pts - int(ns_target["points"])
         
-    # If not found or outside Top 10 boundary, ns_points and ns_rank remain None.
-    # The UI will use this state to display the stylized specialized message.
+        # Determine prefix and color
+        if diff >= 0:
+            ns_diff_str = f"+{diff:,}"
+            ns_color = "#3dd56d" # Success Green
+        else:
+            # Negative difference handles its own sign
+            ns_diff_str = f"{diff:,}"
+            ns_color = "#ff4b4b" # Error Red
+        
+    # Else: Fallback message
+    else:
+        ns_diff_str = "NS143 not in Top 10"
+        ns_color = "#ffee44" # Custom legible yellow
 
     return LeaderboardSnapshot(
         points=tgt_pts,
@@ -164,6 +178,6 @@ def snapshot_pv758() -> LeaderboardSnapshot | None:
         first_place_points=first_pts,
         points_behind_first=behind,
         fetched_at=datetime.now().strftime("%m/%d %H:%M"),
-        ns143_points=ns_points, 
-        ns143_rank=ns_rank, 
+        ns143_diff_str=ns_diff_str,
+        ns143_color=ns_color,
     )
