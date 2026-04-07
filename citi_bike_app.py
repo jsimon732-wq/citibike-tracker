@@ -18,13 +18,7 @@ from __future__ import annotations
 import html
 import sys
 import urllib.error
-# ---------------------------------------------------------
-# FIX START: ADD MISSING IMPORT
-# ---------------------------------------------------------
 import streamlit as st 
-# ---------------------------------------------------------
-# FIX END
-# ---------------------------------------------------------
 
 def _running_in_streamlit() -> bool:
     """True when this script is executed by `streamlit run`, not `python ...`."""
@@ -35,7 +29,7 @@ def _running_in_streamlit() -> bool:
 
 def main() -> None:
     # ---------------------------------------------------------
-    # 1. New Imports Needed for Custom Legend
+    # 1. Imports
     # ---------------------------------------------------------
     import folium
     import branca.element # Used for custom HTML
@@ -97,7 +91,7 @@ def main() -> None:
         c2.metric("Rank", rank_disp)
         
         # ---------------------------------------------------------
-        # 2. NS143 Comparison Metric with custom HTML/CSS
+        # 2. NS143 Comparison Metric with custom HTML/CSS - FIX: Corrected final quote
         # ---------------------------------------------------------
         
         # 1. Handle case where NS143 isn't found (fallback)
@@ -120,7 +114,7 @@ def main() -> None:
             ns_comp_text = f"{diff_prefix}{diff:,} pts"
 
             # 5. Build Custom HTML replicating st.metric while adding comparison label
-            # The structure is: Label (Behind 1st place) + Smaller styled text for NS143 comparison
+            # FIX: Added the missing closing quote to the stMetricValue style.
             metric_html = f"""
                 <div data-testid="stMetric" style="width: 100%;">
                     <label data-testid="stMetricLabel" style="font-size: 14px; color: rgba(250, 250, 250, 0.6); display: flex; align-items: baseline; gap: 6px;">
@@ -249,39 +243,42 @@ def main() -> None:
 
     # ---------------------------------------------------------
     # 4 & 5. Define HTML Legend and Add Custom Floating Legend with Color Swatches
+    # MODIFICATION: Simple solid colors, black text, better legibility
     # ---------------------------------------------------------
 
     legend_html = """
     {% macro html(this, kwargs) %}
     <div id='maplegend' class='maplegend' 
-        style='position: absolute; z-index:9999; border:2px solid grey; background-color:rgba(255, 255, 255, 0.8);
-        border-radius:6px; padding: 10px; font-size:14px; right: 20px; bottom: 50px; 
-        font-family: system-ui, sans-serif; box-shadow: 0 0 15px rgba(0,0,0,0.2);'>
+        style='position: absolute; z-index:9999; border:2px solid grey; background-color:rgba(255, 255, 255, 0.9);
+        border-radius:6px; padding: 12px; font-size:14px; right: 20px; bottom: 50px; 
+        font-family: system-ui, sans-serif; box-shadow: 0 0 15px rgba(0,0,0,0.3);
+        color: black !important; /* Set text to black globally */
+        max-width: 320px;'>
       
-      <div class='legend-title' style='font-weight: bold; margin-bottom: 8px;'>Station Status</div>
+      <div class='legend-title' style='font-weight: bold; margin-bottom: 10px; font-size: 15px; border-bottom: 1px solid #ccc; padding-bottom: 5px; color: black !important;'>Station Status</div>
       
       <div class='legend-scale'>
         <ul class='legend-labels' style='margin: 0; padding: 0; list-style: none;'>
           
-          <li style='margin-bottom: 5px; display: flex; align-items: center;'>
-            <span style='display: block; width: 16px; height: 16px; border-radius: 3px; 
-                        margin-right: 8px; border: 1px solid #111;
-                        background: linear-gradient(to right, #004400 0%, #aaffaa 100%);'></span>
-            Plenty of Bikes (≤30% empty share)
+          <li style='margin-bottom: 8px; display: flex; align-items: center; color: black !important;'>
+            <span style='display: block; width: 18px; height: 18px; border-radius: 4px; 
+                        margin-right: 10px; border: 1px solid #111;
+                        background-color: #00aa44; /* Solid simple green */'></span>
+            <span style="color: black !important;">Plenty of Bikes (≤30% empty share)</span>
           </li>
           
-          <li style='margin-bottom: 5px; display: flex; align-items: center;'>
-            <span style='display: block; width: 16px; height: 16px; border-radius: 3px; 
-                        margin-right: 8px; border: 1px solid #111;
-                        background: linear-gradient(to right, #440000 0%, #ffaaaa 100%);'></span>
-            Low on Bikes (≥70% empty share)
+          <li style='margin-bottom: 8px; display: flex; align-items: center; color: black !important;'>
+            <span style='display: block; width: 18px; height: 18px; border-radius: 4px; 
+                        margin-right: 10px; border: 1px solid #111;
+                        background-color: #cc2222; /* Solid simple red */'></span>
+            <span style="color: black !important;">Low on Bikes (≥70% empty share)</span>
           </li>
           
-          <li style='margin-bottom: 5px; display: flex; align-items: center;'>
-            <span style='display: block; width: 16px; height: 16px; border-radius: 3px; 
-                        margin-right: 8px; border: 1px solid #111;
-                        background: linear-gradient(to right, #887700 0%, #ffffaa 100%);'></span>
-            Low on Classic (≤1 classic AND ≥70% empty share)
+          <li style='margin-bottom: 0px; display: flex; align-items: center; color: black !important;'>
+            <span style='display: block; width: 18px; height: 18px; border-radius: 4px; 
+                        margin-right: 10px; border: 1px solid #111;
+                        background-color: #ffee44; /* Solid simple yellow */'></span>
+            <span style="color: black !important;">Low on Classic (≤1 classic AND ≥70% empty share)</span>
           </li>
           
         </ul>
@@ -289,8 +286,7 @@ def main() -> None:
     </div>
     
     <style type='text/css'>
-      /* Optional: Make legend slightly transparent when hovering map content */
-      #map:hover ~ #maplegend { opacity: 0.9; }
+      /* Removed mouse hover styling for simple legend */
     </style>
     {% endmacro %}
     """
