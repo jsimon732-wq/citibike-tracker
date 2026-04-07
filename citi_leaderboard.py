@@ -1,5 +1,6 @@
+# citi_leaderboard.py
 """
-Bike Angels leaderboard helpers for PV758.
+Bike Angels leaderboard helpers for PV758 and NS143 comparison.
 
 Uses the same page and parsing approach as citibike_leaderboard_scraper.py.
 Requires: pip install requests beautifulsoup4
@@ -16,6 +17,8 @@ from bs4 import BeautifulSoup
 
 LEADERBOARD_URL = "https://account.citibikenyc.com/bike-angels/leaderboard"
 TARGET_RIDER_ID = "PV758"
+# 1. NEW: Define the comparison target ID
+COMPARISON_TARGET_ID = "NS143" 
 USER_AGENT = "RideOnPV758/1.0 (+mailto:jsimon732@gmail.com)"
 
 
@@ -26,6 +29,8 @@ class LeaderboardSnapshot:
     first_place_points: int
     points_behind_first: int
     fetched_at: str
+    # 2. NEW: Add placeholder for NS143 points
+    ns143_points: int | None = None 
 
 
 def fetch_leaderboard_html() -> str:
@@ -106,7 +111,7 @@ def _find_target_fallback(html: str, target_id: str) -> dict | None:
 
 def snapshot_pv758() -> LeaderboardSnapshot | None:
     """
-    Return PV758 points, rank, first-place points, and gap to first.
+    Return PV758 points, rank, first-place points, gap to first, AND NS143 points.
     """
     html = fetch_leaderboard_html()
     rows = _parse_all_table_rows(html)
@@ -124,6 +129,12 @@ def snapshot_pv758() -> LeaderboardSnapshot | None:
     if target is None:
         target = _find_target_fallback(html, TARGET_RIDER_ID)
 
+    # 3. NEW: Look for NS143 (comparison target)
+    comp_target = by_id.get(COMPARISON_TARGET_ID)
+    if comp_target is None:
+        # Fallback to general text search if not in table
+        comp_target = _find_target_fallback(html, COMPARISON_TARGET_ID)
+
     if target is None or first is None:
         return None
 
@@ -132,10 +143,15 @@ def snapshot_pv758() -> LeaderboardSnapshot | None:
     rank = target["rank"]
     behind = max(0, first_pts - tgt_pts)
 
+    # 4. NEW: Extract NS143 points if found
+    ns_pts = int(comp_target["points"]) if comp_target else None
+
     return LeaderboardSnapshot(
         points=tgt_pts,
         rank=rank,
         first_place_points=first_pts,
         points_behind_first=behind,
         fetched_at=datetime.now().strftime("%m/%d %H:%M"),
+        # 5. NEW: Include NS143 points in snapshot
+        ns143_points=ns_pts, 
     )
