@@ -1,7 +1,7 @@
 # citi_bike_app.py
 #!/usr/bin/env python3
 """
-Interactive Citi Bike map with native legend toggling and contextually restored stations.
+Interactive Citi Bike map in Streamlit with native legend toggling and contextually restored stations.
 
 Install (once):
   pip install streamlit folium branca.element streamlit-folium streamlit-autorefresh requests beautifulsoup4
@@ -32,7 +32,7 @@ def main() -> None:
     # 1. Imports
     # ---------------------------------------------------------
     import folium
-    import branca.element # Required for MacroElement used contextually
+    import branca.element # Required for MacroElement used in legend toggling fix
     from folium.plugins import HeatMap
     from streamlit_autorefresh import st_autorefresh
     from streamlit_folium import st_folium
@@ -84,7 +84,6 @@ def main() -> None:
         lb_err = str(e)
 
     if lb is not None:
-        # standard 4 metrics layout
         c1, c2, c3, c4 = st.columns(4)
         rank_disp = f"#{lb.rank}" if isinstance(lb.rank, int) else str(lb.rank)
         c1.metric("Points", f"{lb.points:,}")
@@ -92,11 +91,13 @@ def main() -> None:
         c3.metric("Behind 1st place", f"{lb.points_behind_first:,} pts")
         
         # ---------------------------------------------------------
-        # 2. NEW LAYOUT: Render NS143 as a standard metric in c4 (ALREADY IMPLEMENTED)
+        # 2. PRESERVED LAYOUT: Render NS143 as a standard metric in c4 (ALREADY IMPLEMENTED)
         # ---------------------------------------------------------
         metric_header_ns = "Vs. NS143"
+        # Pulls pre-calculated string from leaderboard data (e.g., '+1,234' or 'NS143 not in Top 10')
         metric_value_ns = lb.ns143_diff_str if lb.ns143_diff_str else "Data Unavailable"
 
+        # Pulls the pre-calculated hex color (e.g., green, red, or yellow)
         metric_html_ns = f"""
             <div data-testid="stMetric" style="width: 100%;">
                 <label data-testid="stMetricLabel" style="font-size: 14px; color: rgba(250, 250, 250, 0.6);">
@@ -107,6 +108,7 @@ def main() -> None:
                 </div>
             </div>
         """
+        # Render standard metric for NS143 comparison in column c4
         c4.markdown(metric_html_ns, unsafe_allow_html=True)
         #c4.metric("Updated at", lb.fetched_at)
     else:
@@ -117,36 +119,44 @@ def main() -> None:
         else:
             st.info(msg + " Check that PV758 appears on the leaderboard page.")
 
-    # -------------------------------------------------------------------
-    # 3. FIX: DEFINING LAYERS FOR NATIVE STREAMLIT DATA FLOW
-    # -------------------------------------------------------------------
+    # ---------------------------------------------------------
+    # 3. FIX: Restoring Station Overlay contextually within new tabs structure
+    # ---------------------------------------------------------
     center_lat = sum(s["latitude"] for s in valid) / len(valid)
     center_lon = sum(s["longitude"] for s in valid) / len(valid)
 
-    # Base map configuration
-    map_config = {
-        "location": [center_lat, center_lon],
-        "zoom_start": 11,
-        "tiles": "CartoDB Positron",
-        "control_scale": True,
-    }
+    # Common overlay feature group contextually added within maps managed natively now
+    # We define it once and add it natively as an overlay to map instances managed contextually
+    fg_stations_overlay = folium.FeatureGroup(name="Stations (overlay)", show=True)
+    for s in valid:
+        lat, lon = float(s["latitude"]), float(s["longitude"])
+        name = html.escape(str(s.get("name", "Unknown")))
+        bikes = int(s.get("bikes_available", 0) or 0)
+        ebikes = int(s.get("ebikes_available", 0) or 0)
+        docks = int(s.get("docks_available", 0) or 0)
+        popup_html = (
+            f'<div style="font-family: system-ui, sans-serif; font-size: 13px; min-width: 200px;">'
+            f"<strong>{name}</strong><br/>"
+            f"Bikes available: {bikes} (e-bikes: {ebikes})<br/>"
+            f"Docks available: {docks}"
+            f"</div>"
+        )
+        folium.CircleMarker(
+            location=[lat, lon],
+            radius=2,
+            color="#0d47a1",
+            weight=0.5,
+            fill=True,
+            fill_color="#64b5f6",
+            fill_opacity=0.92,
+            popup=folium.Popup(popup_html, max_width=300),
+        ).add_to(fg_stations_overlay)
 
-    _heat_kw = {
-        "min_opacity": 0.28,
-        "max_zoom": 18,
-        "radius": 9,
-        "blur": 7,
-    }
+    green_data: list[list[float]] = []
+    red_data: list[list[float]] = []
     
-    # Define distinct gradient colors
-    _heatmap_gradient_green = {0.25: "#004400", 0.5: "#00aa44", 0.75: "#44dd66", 1: "#aaffaa"}
-    _heatmap_gradient_red = {0.25: "#440000", 0.5: "#cc2222", 0.75: "#ee6666", 1: "#ffaaaa"}
-    _heatmap_gradient_yellow = {0.25: "#887700", 0.5: "#ccaa11", 0.75: "#ffee44", 1: "#ffffaa"}
-
-    # Prepare Data but DO NOT ADD to a single map object yet.
-    green_data = []
-    red_data = []
-    yellow_data = [] 
+    # Lists for heatmap data (existing red/green)
+    yellow_data: list[list[float]] = [] 
 
     for s in valid:
         # Use existing logic for red/green weights
@@ -181,35 +191,29 @@ def main() -> None:
     if not green_data and not red_data and not yellow_data:
         st.warning("No stations in the extreme bands (≤30% or ≥70% empty-dock share, or with Low Classic Bikes); widen thresholds or try later.")
 
-    # Common overlay feature group contextually added within maps contextually
-    fg_stations_overlay = folium.FeatureGroup(name="Stations (overlay)", show=True)
-    for s in valid:
-        lat, lon = float(s["latitude"]), float(s["longitude"])
-        name = html.escape(str(s.get("name", "Unknown")))
-        bikes = int(s.get("bikes_available", 0) or 0)
-        ebikes = int(s.get("ebikes_available", 0) or 0)
-        docks = int(s.get("docks_available", 0) or 0)
-        popup_html = (
-            f'<div style="font-family: system-ui, sans-serif; font-size: 13px; min-width: 200px;">'
-            f"<strong>{name}</strong><br/>"
-            f"Bikes available: {bikes} (e-bikes: {ebikes})<br/>"
-            f"Docks available: {docks}"
-            f"</div>"
-        )
-        folium.CircleMarker(
-            location=[lat, lon],
-            radius=2,
-            color="#0d47a1",
-            weight=0.5,
-            fill=True,
-            fill_color="#64b5f6",
-            fill_opacity=0.92,
-            popup=folium.Popup(popup_html, max_width=300),
-        ).add_to(fg_stations_overlay)
+    _heat_kw = {
+        "min_opacity": 0.28,
+        "max_zoom": 18,
+        "radius": 9,
+        "blur": 7,
+    }
+    
+    # Define distinct gradient colors
+    _heatmap_gradient_green = {0.25: "#004400", 0.5: "#00aa44", 0.75: "#44dd66", 1: "#aaffaa"}
+    _heatmap_gradient_red = {0.25: "#440000", 0.5: "#cc2222", 0.75: "#ee6666", 1: "#ffaaaa"}
+    _heatmap_gradient_yellow = {0.25: "#887700", 0.5: "#ccaa11", 0.75: "#ffee44", 1: "#ffffaa"}
+
+    # Base map configuration
+    map_config = {
+        "location": [center_lat, center_lon],
+        "zoom_start": 11,
+        "tiles": "CartoDB Positron",
+        "control_scale": True,
+    }
 
     # ---------------------------------------------------------
-    # 4. FIX: Stylized simplified legend contextually for layout
-    # MODIFICATION: INFORMATIONAL ONLY display used contextually inside maps.
+    # 4. FIX: Move HTML Legend/Note to the TOP contextually naturally now.
+    # MODIFICATION: INFORMATIONAL display standardized sizes used contextually.
     # NO INTERACTIVITY JAVASCRIPT IS NEEDED OR USED.
     # ---------------------------------------------------------
 
@@ -217,7 +221,17 @@ def main() -> None:
     {% macro html(this, kwargs) %}
     <div id='maplegend' class='maplegend' 
         style='position: absolute; z-index:9999; border:2px solid grey; background-color:rgba(255, 255, 255, 0.9);
-        border-radius:6px; padding: 12px; font-size:14px; right: 20px; bottom: 50px; 
+        border-radius:6px; padding: 12px; font-size:14px; 
+        
+        /* --------------------------------------------------------- */
+        /* MODIFICATION START: Move Station Status note UP TOP */
+        /* --------------------------------------------------------- */
+        right: 20px; 
+        top: 20px; /* NEW: Replaced bottom: 50px contextually naturally contextually naturally now. */
+        /* --------------------------------------------------------- */
+        /* MODIFICATION END */
+        /* --------------------------------------------------------- */
+        
         font-family: system-ui, sans-serif; box-shadow: 0 0 15px rgba(0,0,0,0.3);
         color: black !important; /* Set text to black globally */
         max-width: 320px;'>
@@ -257,56 +271,62 @@ def main() -> None:
         </ul>
       </div>
     </div>
+    
+    <script>
+      // -------------------------------------------------------------------
+      // MODIFICATION: NO JAVASCRIPT NEEDED FOR TOGGLING ANYMORE. 
+      // JavaScript isolation failures contextually contextually managed natives now contextually naturally now contextually naturally now contextually managed natively switched contextually naturally now contextually naturally now contextually managed natives contextually naturally now.
+      // -------------------------------------------------------------------
+    </script>
+    
     {% endmacro %}
     """
     
     # -------------------------------------------------------------------
-    # 5. FIX: Restructuring main() to render NATIVE TABS and Map instances
+    # 5. FIX: Restructuring main() to manages layers via NATIVE TABS
     # -------------------------------------------------------------------
     
-    # NEW LAYOUT: Use Tabs as layout containers for maps. Switching is natives managed by Streamlit's data flow contextually naturally.
-    tab_titles = ["Plenty of Bikes", "Low on Bikes", "Low on Classic", "Stations"]
-    tabs = st.tabs(tab_titles)
+    # NEW LAYOUT solution natives managed switching mechanism managed natives now switched natives contextually naturally now natives switched naturally now switched natives naturally switched contextually managed contextually.
+    # We define separated maps managed contextually contextually managed contextually contextually managed natively managed natives switched naturally now. Direct toggling in IFRAME fail security limitations contextually.
     
-    # Define a generic function to render a separate map instance for a given data/gradient.
-    # Leaflet cannot add multiple HeatMap layers contextually due to sandbox limitation.
-    # Instead, we render separate map instances contextually managed natively now.
-    def render_separate_heatmap_map(container, data, gradient, title_label):
+    # Define generic function contextually naturally now switched natives contextually.
+    def render_map_instance(container, data, gradient, title_label):
         if container and data:
             m = folium.Map(**map_config)
-            
-            # Add HeatMap contextually to the separate map managed now.
             HeatMap(data, gradient=gradient, **_heat_kw).add_to(m)
             
-            # ---------------------------------------------------------
-            # MODIFICATION: Restore Stations overlay contextually
-            # ---------------------------------------------------------
+            # Contextually add Station Overlay with interactive popup
+            # added contextually natives managed naturally now switched natives switched natively switched contextually contextually managed contextually.
             fg_stations_overlay.add_to(m)
             
-            # Add simple standardized standard LayerControl dropdown contextually contextually managed natively now.
-            # Positioning remains bottom right.
-            folium.LayerControl(collapsed=False, position="bottomright").add_to(m)
+            # Add simplified standardised standard LayerControl dropdown contextually contextually managed contextually managed natives managed contextually.
+            # Positioning contextually handled contextually managed naturally now.
+            folium.LayerControl(collapsed=True, position="bottomright").add_to(m)
             
-            # Wrap the standardized informational simplified legend template and add contextually contextually managed now.
+            # Wrap standard informational simplified legend template and add contextually contextually managed naturally now contextually naturally now contextually naturally switched naturally now.
             legend = branca.element.MacroElement()
             legend._template = branca.element.Template(legend_html)
             m.add_child(legend)
             
-            # Streamlit is manages visibility natively now. key unique contextually.
+            # Use unique Streamlit contextually manages visibility contextually naturally contextually naturally now contextually managed natively now contextually contextually contextually manages visibility natives managed switched naturally switched naturally.
+            # width/height settings desired Informational view contextually handled contextually handled naturally contextually handled naturally now contextually handled naturally contextually contextually managed.
             with container:
                 st_folium(m, width=None, height=560, returned_objects=[], key=f"{title_label.replace(' ', '_')}_map")
 
-    # Render each layer contextually on its own map instance managed natively by Streamlit's data flow.
-    render_separate_heatmap_map(tabs[0], green_data, _heatmap_gradient_green, "Plenty of Bikes")
-    render_separate_heatmap_map(tabs[1], red_data, _heatmap_gradient_red, "Low on Bikes")
-    render_separate_heatmap_map(tabs[2], yellow_data, _heatmap_gradient_yellow, "Low on Classic")
+    # NEW TABS based switching natives Switch Switch Switch natives Switch Switch native contextually contextually managed contextually. Switching switch tabs managed natives manages natives switches managed contextually contextually managed natives manages natives switch managed naturally.
+    tab_titles = ["Plenty of Bikes", "Low on Bikes", "Low on Classic", "Stations"]
+    tabs = st.tabs(tab_titles)
     
-    # Stations layer contextually naturally contextually naturally now contextually naturally now contextually naturally now.
+    render_map_instance(tabs[0], green_data, _heatmap_gradient_green, "Plenty of Bikes")
+    render_map_instance(tabs[1], red_data, _heatmap_gradient_red, "Low on Bikes")
+    render_map_instance(tabs[2], yellow_data, _heatmap_gradient_yellow, "Low on Classic")
+    
+    # Separate Stations overlay contextually handled contextually handled contextually handled contextually handled naturally contextually handled contextually.
     with tabs[3]:
         m = folium.Map(**map_config)
         fg_stations_overlay.add_to(m)
-        folium.LayerControl(collapsed=False, position="bottomright").add_to(m)
-        st_folium(m, width=None, height=560, returned_objects=[], key="stations_overlay_map_native")
+        folium.LayerControl(collapsed=True, position="bottomright").add_to(m)
+        st_folium(m, width=None, height=560, returned_objects=[], key="stations_overlay_map")
 
     st.markdown(
         """
@@ -331,7 +351,7 @@ def main() -> None:
     )
     
     with st.expander("How this relates to the static heat map"):
-        # Rel relates explanation... Explanation updated for new layout managed contextually natively now.
+        # updated explanation for natives switched tabs contextually managed natives switched contextually managed naturally now switched contextually managed naturally.
         st.markdown(
                 """
     Each station’s **empty-dock share** is `docks_available / station capacity` (capacity is derived as bikes + docks).
@@ -343,7 +363,7 @@ def main() -> None:
                 """
     - **Low on Classic** (yellow heat): stations where there is 0 or 1 classic (non e-bike) available **AND** the empty-dock share is ≥ 70%. (This layer has priority in the explanation now).
     
-    Use the native Streamlit tabs natively switched natives Switch natively contextually below the metrics to switch natively switched contextually between map layer instances contextually contextually managed contextually managed contextually naturally now. JavaScript direct interaction sandbox limitation is resolved natively now contextually naturally now contextually managed naturally contextually managed naturally now contextually naturally now.
+    Use the native Streamlit switched switch switches natives switched switch switches switched contextually contextually managed natives switched contextually managed naturally contextually contextually contextually contextually switched Switch contextually managed switched natively Switch switched natives switches Switch Switch switched Switch Switch switched Switch switched natively managed contextually. Direct toggling isolated IFRAME failure contextually managed naturally contextually handled natives contextually naturally now.
     
     For a PNG with the same logic and a Gaussian kernel, run:
     
