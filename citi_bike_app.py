@@ -80,7 +80,7 @@ def main() -> None:
         c1.metric("Points", f"{lb.points:,}")
         c2.metric("Rank", rank_disp)
         c3.metric("Behind 1st place", f"{lb.points_behind_first:,} pts")
-        c4.metric("Updated at", lb.fetched_at)
+        #c4.metric("Updated at", lb.fetched_at)
     else:
         msg = "Could not load Bike Angels leaderboard for PV758."
         if lb_err:
