@@ -11,13 +11,14 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Optional
 
 import requests
 from bs4 import BeautifulSoup
 
 LEADERBOARD_URL = "https://account.citibikenyc.com/bike-angels/leaderboard"
 TARGET_RIDER_ID = "PV758"
-# 1. NEW: Define the comparison target ID
+# NEW: Define comparison target ID
 COMPARISON_TARGET_ID = "NS143" 
 USER_AGENT = "RideOnPV758/1.0 (+mailto:jsimon732@gmail.com)"
 
@@ -29,8 +30,9 @@ class LeaderboardSnapshot:
     first_place_points: int
     points_behind_first: int
     fetched_at: str
-    # 2. NEW: Add placeholder for NS143 points
-    ns143_points: int | None = None 
+    # NEW/UPDATED: Placeholder for distinct NS143 data
+    ns143_points: int | None = None
+    ns143_rank: int | None = None
 
 
 def fetch_leaderboard_html() -> str:
@@ -129,12 +131,6 @@ def snapshot_pv758() -> LeaderboardSnapshot | None:
     if target is None:
         target = _find_target_fallback(html, TARGET_RIDER_ID)
 
-    # 3. NEW: Look for NS143 (comparison target)
-    comp_target = by_id.get(COMPARISON_TARGET_ID)
-    if comp_target is None:
-        # Fallback to general text search if not in table
-        comp_target = _find_target_fallback(html, COMPARISON_TARGET_ID)
-
     if target is None or first is None:
         return None
 
@@ -143,8 +139,24 @@ def snapshot_pv758() -> LeaderboardSnapshot | None:
     rank = target["rank"]
     behind = max(0, first_pts - tgt_pts)
 
-    # 4. NEW: Extract NS143 points if found
-    ns_pts = int(comp_target["points"]) if comp_target else None
+    # ---------------------------------------------------------
+    # NEW/UPDATED Logic for NS143 boundary check (Top 10)
+    # ---------------------------------------------------------
+    ns_points = None
+    ns_rank = None
+    # Boundary is Top 10
+    NS143_BOUNDARY = 10 
+    
+    # 1. NEW: Look for NS143 in the standard table rows (Top N results)
+    ns_target = by_id.get(COMPARISON_TARGET_ID)
+    
+    # If found, check if their rank qualifies for the Top 10 comparison
+    if ns_target and isinstance(ns_target.get("rank"), int) and ns_target["rank"] <= NS143_BOUNDARY:
+        ns_points = int(ns_target["points"])
+        ns_rank = ns_target["rank"]
+        
+    # If not found or outside Top 10 boundary, ns_points and ns_rank remain None.
+    # The UI will use this state to display the stylized specialized message.
 
     return LeaderboardSnapshot(
         points=tgt_pts,
@@ -152,6 +164,6 @@ def snapshot_pv758() -> LeaderboardSnapshot | None:
         first_place_points=first_pts,
         points_behind_first=behind,
         fetched_at=datetime.now().strftime("%m/%d %H:%M"),
-        # 5. NEW: Include NS143 points in snapshot
-        ns143_points=ns_pts, 
+        ns143_points=ns_points, 
+        ns143_rank=ns_rank, 
     )
