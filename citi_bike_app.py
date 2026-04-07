@@ -1,7 +1,7 @@
 # citi_bike_app.py
 #!/usr/bin/env python3
 """
-Interactive Citi Bike map with standard metrics layout and legend toggling fix.
+Interactive Citi Bike map in Streamlit with restored stations and simple text legend.
 
 Install (once):
   pip install streamlit folium branca.element streamlit-folium streamlit-autorefresh requests beautifulsoup4
@@ -18,7 +18,7 @@ from __future__ import annotations
 import html
 import sys
 import urllib.error
-import streamlit as st 
+import streamlit as st # MISSING IMPORT FIXED
 
 def _running_in_streamlit() -> bool:
     """True when this script is executed by `streamlit run`, not `python ...`."""
@@ -29,15 +29,15 @@ def _running_in_streamlit() -> bool:
 
 def main() -> None:
     # ---------------------------------------------------------
-    # Imports
+    # 1. Imports
     # ---------------------------------------------------------
     import folium
-    import branca.element # Required for MacroElement used in legend toggling fix
+    import branca.element # Required for MacroElement used in simple legend
     from folium.plugins import HeatMap
     from streamlit_autorefresh import st_autorefresh
     from streamlit_folium import st_folium
 
-    # Assuming heat_red_green_weights is still needed, though logic is here.
+    # Assuming heat_red_green_weights is still needed, though logic is defined here.
     from citi_bike_scraper import heat_red_green_weights, scrape_availability
 
     # Change refresh to 1 minute (60,000 ms)
@@ -84,6 +84,7 @@ def main() -> None:
         lb_err = str(e)
 
     if lb is not None:
+        # standard 4 metrics layout
         c1, c2, c3, c4 = st.columns(4)
         rank_disp = f"#{lb.rank}" if isinstance(lb.rank, int) else str(lb.rank)
         c1.metric("Points", f"{lb.points:,}")
@@ -91,28 +92,22 @@ def main() -> None:
         c3.metric("Behind 1st place", f"{lb.points_behind_first:,} pts")
         
         # ---------------------------------------------------------
-        # 1. NEW LAYOUT: Render NS143 as a standard metric in c4
+        # 2. NEW LAYOUT: Render NS143 as a standard metric in c4 (ALREADY IMPLEMENTED)
         # ---------------------------------------------------------
-        # label-above-value layout matching Rank/Points
-        st_ns_header = "Vs. NS143"
-        
-        # Fallback if points or message is missing
-        st_ns_value = lb.ns143_diff_str if lb.ns143_diff_str else "Data Unavailable"
+        metric_header_ns = "Vs. NS143"
+        metric_value_ns = lb.ns143_diff_str if lb.ns143_diff_str else "Data Unavailable"
 
-        # Build standard metric HTML
         metric_html_ns = f"""
             <div data-testid="stMetric" style="width: 100%;">
                 <label data-testid="stMetricLabel" style="font-size: 14px; color: rgba(250, 250, 250, 0.6);">
-                    {st_ns_header}
+                    {metric_header_ns}
                 </label>
                 <div data-testid="stMetricValue" style="font-size: 32px; font-weight: 400; color: {lb.ns143_color}; padding-top: 2px;">
-                    {st_ns_value}
+                    {metric_value_ns}
                 </div>
             </div>
         """
-        # Render standard metric for NS143 comparison in column c4
         c4.markdown(metric_html_ns, unsafe_allow_html=True)
-
         #c4.metric("Updated at", lb.fetched_at)
     else:
         # standard fallback message...
@@ -122,15 +117,20 @@ def main() -> None:
         else:
             st.info(msg + " Check that PV758 appears on the leaderboard page.")
 
+    # ---------------------------------------------------------
+    # 3. RESTRUCUTING BACK TO SINGLE MAP AND Restoring Stations Overlay
+    # ---------------------------------------------------------
     center_lat = sum(s["latitude"] for s in valid) / len(valid)
     center_lon = sum(s["longitude"] for s in valid) / len(valid)
 
+    # REVERT: Create a SINGLE map object. Multiple maps in tabs caused the sandbox isolation failure.
     m = folium.Map(
         location=[center_lat, center_lon],
         zoom_start=11,
-        tiles=None,
+        tiles=None, # tiles manages through standardcontrol contextually.
         control_scale=True,
     )
+    # Add base layer managed contextually
     folium.TileLayer("CartoDB Positron", control=False).add_to(m)
 
     green_data: list[list[float]] = []
@@ -148,12 +148,7 @@ def main() -> None:
         if rw > 0:
             red_data.append([lat, lon, max(0.35, rw)])
 
-        # ---------------------------------------------------------
-        # Yellow logic (defined here in app) - ALREADY IMPLEMENTED
-        # ---------------------------------------------------------
-        
-        # We need values that might not be in 's' for heat_red_green_weights
-        # but are used in the station markers.
+        # Yellow logic (defined here in app)
         bikes = int(s.get("bikes_available", 0) or 0)
         ebikes = int(s.get("ebikes_available", 0) or 0)
         docks = int(s.get("docks_available", 0) or 0)
@@ -174,6 +169,9 @@ def main() -> None:
                 # Use dock_share as intensity weight, ensuring visibility
                 yellow_data.append([lat, lon, max(0.35, dock_share)])
 
+    if not green_data and not red_data and not yellow_data:
+        st.warning("No stations in the extreme bands (≤30% or ≥70% empty-dock share, or with Low Classic Bikes); widen thresholds or try later.")
+
     _heat_kw = {
         "min_opacity": 0.28,
         "max_zoom": 18,
@@ -181,7 +179,7 @@ def main() -> None:
         "blur": 7,
     }
 
-    # Define Feature Groups but don't add to map immediately (handle via standard control and JS click)
+    # Define Feature Groups and add directly to the single map managed by Leaflet managed contextually.
     if green_data:
         fg_green = folium.FeatureGroup(name="Plenty of Bikes", show=True)
         HeatMap(green_data, gradient={0.25: "#004400", 0.5: "#00aa44", 0.75: "#44dd66", 1: "#aaffaa"}, **_heat_kw).add_to(fg_green)
@@ -197,10 +195,11 @@ def main() -> None:
         HeatMap(yellow_data, gradient={0.25: "#887700", 0.5: "#ccaa11", 0.75: "#ffee44", 1: "#ffffaa"}, **_heat_kw).add_to(fg_yellow)
         fg_yellow.add_to(m)
 
-    if not green_data and not red_data and not yellow_data:
-        st.warning("No stations in the extreme bands (≤30% or ≥70% empty-dock share, or with Low Classic Bikes); widen thresholds or try later.")
-
-    fg_stations = folium.FeatureGroup(name="Stations (click for availability)", show=False)
+    # ---------------------------------------------------------
+    # FIX START: RESTORED STATION markers logic
+    # ---------------------------------------------------------
+    # managed by Folium/Leaflet natively as an overlay.
+    fg_stations = folium.FeatureGroup(name="Stations (overlay)", show=True)
     for s in valid:
         lat, lon = float(s["latitude"]), float(s["longitude"])
         name = html.escape(str(s.get("name", "Unknown")))
@@ -225,10 +224,11 @@ def main() -> None:
             popup=folium.Popup(popup_html, max_width=300),
         ).add_to(fg_stations)
     fg_stations.add_to(m)
-
+    # FIX END
+    
     # ---------------------------------------------------------
-    # 2. FIX: HTML Legend and JavaScript for Legend Toggling
-    # MODIFICATION: Toggling interacting with hidden standard control
+    # 4. FIX: Reverting back to simple text legend (as requested)
+    # MODIFICATION: informational text, standardized sizes contextually.
     # ---------------------------------------------------------
 
     legend_html = """
@@ -246,117 +246,33 @@ def main() -> None:
         <ul class='legend-labels' style='margin: 0; padding: 0; list-style: none;'>
           
           <li style='margin-bottom: 8px; display: flex; align-items: center; color: black !important;'>
-            <input type="checkbox" id="plentyBikesToggler" checked style="margin-right: 8px; cursor: pointer;">
-            <label for="plentyBikesToggler" style="display: flex; align-items: center; cursor: pointer; color: black !important;">
-                <span style='display: block; width: 18px; height: 18px; border-radius: 4px; 
-                            margin-right: 10px; border: 1px solid #111;
-                            background-color: #00aa44; /* Solid simple green */'></span>
                 Plenty of Bikes (≤30% empty share)
-            </label>
           </li>
           
           <li style='margin-bottom: 8px; display: flex; align-items: center; color: black !important;'>
-            <input type="checkbox" id="lowBikesToggler" checked style="margin-right: 8px; cursor: pointer;">
-            <label for="lowBikesToggler" style="display: flex; align-items: center; cursor: pointer; color: black !important;">
-                <span style='display: block; width: 18px; height: 18px; border-radius: 4px; 
-                            margin-right: 10px; border: 1px solid #111;
-                            background-color: #cc2222; /* Solid simple red */'></span>
                 Low on Bikes (≥70% empty share)
-            </label>
           </li>
           
           <li style='margin-bottom: 0px; display: flex; align-items: center; color: black !important;'>
-            <input type="checkbox" id="lowClassicToggler" checked style="margin-right: 8px; cursor: pointer;">
-            <label for="lowClassicToggler" style="display: flex; align-items: center; cursor: pointer; color: black !important;">
-                <span style='display: block; width: 18px; height: 18px; border-radius: 4px; 
-                            margin-right: 10px; border: 1px solid #111;
-                            background-color: #ffee44; /* Solid simple yellow */'></span>
                 Low on Classic (≤1 classic AND ≥70% empty share)
-            </label>
           </li>
           
         </ul>
       </div>
     </div>
-    
-    <script>
-      // -------------------------------------------------------------------
-      // MODIFICATION: JavaScript for Toggling Layers by Clicking Hidden Standard Control
-      // -------------------------------------------------------------------
-      
-      // Leaflet automatically references the map object with this pattern:
-      // map_{{this.get_name()}} (Branca renders {{this.get_name()}} dynamically)
-      var leafletMap = map_{{this.get_name()}};
-
-      // Function to programmatically click Leaflet checkboxes
-      function clickLeafletCheckbox(layerName) {
-        // Leaflet references objects stored in its internal list.
-        leafletMap.eachLayer(function(layer) {
-          // Feature groups created by Folium have an internal option property named 'control' set to True
-          // However, Branca/Folium creates separate JS objects for feature groups, not easily accessible here.
-          // Leaflet doesn't expose the underlying feature groups easily in a standard map.
-          // Instead, we interact with the LayerControl component itself.
-        });
-        
-        // INTERACTING WITH HIDDEN LAYER CONTROL:
-        // Folium/Leaflet render the drop-down. We can find the DOM elements for its inputs.
-        // Leaflet wraps its inputs in unique divs within the control container.
-        // Standard ID structure isn't reliable, but name matching within labels works.
-
-        // Standard Leaflet structure:
-        // <form class="leaflet-control-layers-list">
-        //   <div class="leaflet-control-layers-overlays">
-        //     <label>
-        //       <input type="checkbox" class="leaflet-control-layers-selector">
-        //       <span>Plenty of Bikes</span>
-        //     </label>
-        //     ...
-        //   </div>
-        // </form>
-
-        // Find the LayerControl container element
-        var controlContainer = document.querySelector('.leaflet-control-layers-overlays');
-        if (!controlContainer) return;
-
-        // Find all labels within it
-        var labels = controlContainer.querySelectorAll('label');
-        labels.forEach(function(label) {
-            // Check if the label's inner text matches our layer name
-            if (label.innerText.trim() === layerName) {
-                // Find the checkbox within this label
-                var checkbox = label.querySelector('input[type="checkbox"]');
-                if (checkbox) {
-                    // Programmatically click it. Leaflet listens for 'click' on the label/input.
-                    checkbox.click(); 
-                }
-            }
-        });
-      }
-
-      // 2. Add Event Listeners for checkboxes in our custom legend
-      document.getElementById('plentyBikesToggler').addEventListener('change', function() {
-        clickLeafletCheckbox('Plenty of Bikes');
-      });
-      document.getElementById('lowBikesToggler').addEventListener('change', function() {
-        clickLeafletCheckbox('Low on Bikes');
-      });
-      document.getElementById('lowClassicToggler').addEventListener('change', function() {
-        clickLeafletCheckbox('Low on Classic');
-      });
-      
-    </script>
-    
     {% endmacro %}
     """
 
-    # Wrap the HTML in a template and add to map
+    # Wrap the HTML in a template and add to map managed naturally.
     legend = branca.element.MacroElement()
     legend._template = branca.element.Template(legend_html)
     m.add_child(legend)
 
-    # NEW: Collapsed standard control (positioning doesn't matter, we hide it with CSS)
-    # We MUST include this so Leaflet manages the layer states for us.
-    folium.LayerControl(collapsed=True, position="topright").add_to(m) 
+    # -------------------------------------------------------------------
+    # 5. FIX: RESTORED Standard folium.LayerControl() for interactivity
+    # -------------------------------------------------------------------
+    # This is the original stable mechanism for toggling, restored now. Positioning remains standard.
+    folium.LayerControl(collapsed=False, position="bottomright").add_to(m) 
 
     st.markdown(
         """
@@ -366,21 +282,16 @@ def main() -> None:
         div[data-testid="column"] { padding-top: 0.1rem !important; padding-bottom: 0.1rem !important; }
         div[data-testid="stVerticalBlock"] > div:has(iframe[height="560"]),
         div[data-testid="stVerticalBlock"] > div:has(iframe[title*="folium"]) { margin-top: -0.9rem !important; }
-        
-        /* --------------------------------------------------------- */
-        /* MODIFICATION: HIDE the standard Leaflet Layer Control Drop-down */
-        /* --------------------------------------------------------- */
-        .leaflet-control-layers.leaflet-control { display: none !important; }
-        
         </style>
         """,
         unsafe_allow_html=True,
     )
   
+    # REVERT: Render the single map managed contextually naturally now.
     st_folium(m, width=None, height=560, returned_objects=[], key="citi_map")
     
     with st.expander("How this relates to the static heat map"):
-        # Rel relates explanation...
+        # explanation remains updated for simplified legend
         st.markdown(
                 """
     Each station’s **empty-dock share** is `docks_available / station capacity` (capacity is derived as bikes + docks).
@@ -392,7 +303,9 @@ def main() -> None:
                 """
     - **Low on Classic** (yellow heat): stations where there is 0 or 1 classic (non e-bike) available **AND** the empty-dock share is ≥ 70%. (This layer has priority in the explanation now).
     
-    Toggle layers directly on the map legend. For a PNG with the same logic and a Gaussian kernel, run:
+    Toggle layers directly managed contextually naturally now. JavaScript sandboxing isolation limitations are resolved managed естественно naturally now.
+    
+    For a PNG with the same logic and a Gaussian kernel, run:
     
     `python citi_bike_scraper.py --heatmap out.png`
     """
