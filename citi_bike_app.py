@@ -130,9 +130,9 @@ def main() -> None:
         "blur": 7,
     }
     
-    _heatmap_ gradient_green = {0.25: "#004400", 0.5: "#00aa44", 0.75: "#44dd66", 1: "#aaffaa"}
-    _heatmap_ gradient_red = {0.25: "#440000", 0.5: "#cc2222", 0.75: "#ee6666", 1: "#ffaaaa"}
-    _heatmap_ gradient_yellow = {0.25: "#887700", 0.5: "#ccaa11", 0.75: "#ffee44", 1: "#ffffaa"}
+    _heatmap_gradient_green = {0.25: "#004400", 0.5: "#00aa44", 0.75: "#44dd66", 1: "#aaffaa"}
+    _heatmap_gradient_red = {0.25: "#440000", 0.5: "#cc2222", 0.75: "#ee6666", 1: "#ffaaaa"}
+    _heatmap_gradient_yellow = {0.25: "#887700", 0.5: "#ccaa11", 0.75: "#ffee44", 1: "#ffffaa"}
 
     # Base map configuration
     map_config = {
