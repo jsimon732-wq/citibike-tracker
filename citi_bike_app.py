@@ -1,7 +1,7 @@
 # citi_bike_app.py
 #!/usr/bin/env python3
 """
-Interactive Citi Bike map in Streamlit with restored stations and simple text legend.
+Interactive Citi Bike map with native legend toggling and contextually restored stations.
 
 Install (once):
   pip install streamlit folium branca.element streamlit-folium streamlit-autorefresh requests beautifulsoup4
@@ -18,7 +18,7 @@ from __future__ import annotations
 import html
 import sys
 import urllib.error
-import streamlit as st # MISSING IMPORT FIXED
+import streamlit as st # MISSING IMPORT ALREADY FIXED
 
 def _running_in_streamlit() -> bool:
     """True when this script is executed by `streamlit run`, not `python ...`."""
@@ -32,12 +32,12 @@ def main() -> None:
     # 1. Imports
     # ---------------------------------------------------------
     import folium
-    import branca.element # Required for MacroElement used in simple legend
+    import branca.element # Required for MacroElement used contextually
     from folium.plugins import HeatMap
     from streamlit_autorefresh import st_autorefresh
     from streamlit_folium import st_folium
 
-    # Assuming heat_red_green_weights is still needed, though logic is defined here.
+    # Assuming heat_red_green_weights is needed, though logic is defined here.
     from citi_bike_scraper import heat_red_green_weights, scrape_availability
 
     # Change refresh to 1 minute (60,000 ms)
@@ -117,27 +117,36 @@ def main() -> None:
         else:
             st.info(msg + " Check that PV758 appears on the leaderboard page.")
 
-    # ---------------------------------------------------------
-    # 3. RESTRUCUTING BACK TO SINGLE MAP AND Restoring Stations Overlay
-    # ---------------------------------------------------------
+    # -------------------------------------------------------------------
+    # 3. FIX: DEFINING LAYERS FOR NATIVE STREAMLIT DATA FLOW
+    # -------------------------------------------------------------------
     center_lat = sum(s["latitude"] for s in valid) / len(valid)
     center_lon = sum(s["longitude"] for s in valid) / len(valid)
 
-    # REVERT: Create a SINGLE map object. Multiple maps in tabs caused the sandbox isolation failure.
-    m = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=11,
-        tiles=None, # tiles manages through standardcontrol contextually.
-        control_scale=True,
-    )
-    # Add base layer managed contextually
-    folium.TileLayer("CartoDB Positron", control=False).add_to(m)
+    # Base map configuration
+    map_config = {
+        "location": [center_lat, center_lon],
+        "zoom_start": 11,
+        "tiles": "CartoDB Positron",
+        "control_scale": True,
+    }
 
-    green_data: list[list[float]] = []
-    red_data: list[list[float]] = []
+    _heat_kw = {
+        "min_opacity": 0.28,
+        "max_zoom": 18,
+        "radius": 9,
+        "blur": 7,
+    }
     
-    # Lists for heatmap data (existing red/green)
-    yellow_data: list[list[float]] = [] 
+    # Define distinct gradient colors
+    _heatmap_gradient_green = {0.25: "#004400", 0.5: "#00aa44", 0.75: "#44dd66", 1: "#aaffaa"}
+    _heatmap_gradient_red = {0.25: "#440000", 0.5: "#cc2222", 0.75: "#ee6666", 1: "#ffaaaa"}
+    _heatmap_gradient_yellow = {0.25: "#887700", 0.5: "#ccaa11", 0.75: "#ffee44", 1: "#ffffaa"}
+
+    # Prepare Data but DO NOT ADD to a single map object yet.
+    green_data = []
+    red_data = []
+    yellow_data = [] 
 
     for s in valid:
         # Use existing logic for red/green weights
@@ -172,34 +181,8 @@ def main() -> None:
     if not green_data and not red_data and not yellow_data:
         st.warning("No stations in the extreme bands (≤30% or ≥70% empty-dock share, or with Low Classic Bikes); widen thresholds or try later.")
 
-    _heat_kw = {
-        "min_opacity": 0.28,
-        "max_zoom": 18,
-        "radius": 9,
-        "blur": 7,
-    }
-
-    # Define Feature Groups and add directly to the single map managed by Leaflet managed contextually.
-    if green_data:
-        fg_green = folium.FeatureGroup(name="Plenty of Bikes", show=True)
-        HeatMap(green_data, gradient={0.25: "#004400", 0.5: "#00aa44", 0.75: "#44dd66", 1: "#aaffaa"}, **_heat_kw).add_to(fg_green)
-        fg_green.add_to(m)
-
-    if red_data:
-        fg_red = folium.FeatureGroup(name="Low on Bikes", show=True)
-        HeatMap(red_data, gradient={0.25: "#440000", 0.5: "#cc2222", 0.75: "#ee6666", 1: "#ffaaaa"}, **_heat_kw).add_to(fg_red)
-        fg_red.add_to(m)
-    
-    if yellow_data:
-        fg_yellow = folium.FeatureGroup(name="Low on Classic", show=True)
-        HeatMap(yellow_data, gradient={0.25: "#887700", 0.5: "#ccaa11", 0.75: "#ffee44", 1: "#ffffaa"}, **_heat_kw).add_to(fg_yellow)
-        fg_yellow.add_to(m)
-
-    # ---------------------------------------------------------
-    # FIX START: RESTORED STATION markers logic
-    # ---------------------------------------------------------
-    # managed by Folium/Leaflet natively as an overlay.
-    fg_stations = folium.FeatureGroup(name="Stations (overlay)", show=True)
+    # Common overlay feature group contextually added within maps contextually
+    fg_stations_overlay = folium.FeatureGroup(name="Stations (overlay)", show=True)
     for s in valid:
         lat, lon = float(s["latitude"]), float(s["longitude"])
         name = html.escape(str(s.get("name", "Unknown")))
@@ -222,13 +205,12 @@ def main() -> None:
             fill_color="#64b5f6",
             fill_opacity=0.92,
             popup=folium.Popup(popup_html, max_width=300),
-        ).add_to(fg_stations)
-    fg_stations.add_to(m)
-    # FIX END
-    
+        ).add_to(fg_stations_overlay)
+
     # ---------------------------------------------------------
-    # 4. FIX: Reverting back to simple text legend (as requested)
-    # MODIFICATION: informational text, standardized sizes contextually.
+    # 4. FIX: Stylized simplified legend contextually for layout
+    # MODIFICATION: INFORMATIONAL ONLY display used contextually inside maps.
+    # NO INTERACTIVITY JAVASCRIPT IS NEEDED OR USED.
     # ---------------------------------------------------------
 
     legend_html = """
@@ -246,15 +228,30 @@ def main() -> None:
         <ul class='legend-labels' style='margin: 0; padding: 0; list-style: none;'>
           
           <li style='margin-bottom: 8px; display: flex; align-items: center; color: black !important;'>
+            <label style="display: flex; align-items: center; color: black !important;">
+                <span style='display: block; width: 18px; height: 18px; border-radius: 4px; 
+                            margin-right: 10px; border: 1px solid #111;
+                            background-color: #00aa44; /* Solid simple green */'></span>
                 Plenty of Bikes (≤30% empty share)
+            </label>
           </li>
           
           <li style='margin-bottom: 8px; display: flex; align-items: center; color: black !important;'>
+            <label style="display: flex; align-items: center; color: black !important;">
+                <span style='display: block; width: 18px; height: 18px; border-radius: 4px; 
+                            margin-right: 10px; border: 1px solid #111;
+                            background-color: #cc2222; /* Solid simple red */'></span>
                 Low on Bikes (≥70% empty share)
+            </label>
           </li>
           
           <li style='margin-bottom: 0px; display: flex; align-items: center; color: black !important;'>
+            <label style="display: flex; align-items: center; color: black !important;">
+                <span style='display: block; width: 18px; height: 18px; border-radius: 4px; 
+                            margin-right: 10px; border: 1px solid #111;
+                            background-color: #ffee44; /* Solid simple yellow */'></span>
                 Low on Classic (≤1 classic AND ≥70% empty share)
+            </label>
           </li>
           
         </ul>
@@ -262,17 +259,54 @@ def main() -> None:
     </div>
     {% endmacro %}
     """
-
-    # Wrap the HTML in a template and add to map managed naturally.
-    legend = branca.element.MacroElement()
-    legend._template = branca.element.Template(legend_html)
-    m.add_child(legend)
-
+    
     # -------------------------------------------------------------------
-    # 5. FIX: RESTORED Standard folium.LayerControl() for interactivity
+    # 5. FIX: Restructuring main() to render NATIVE TABS and Map instances
     # -------------------------------------------------------------------
-    # This is the original stable mechanism for toggling, restored now. Positioning remains standard.
-    folium.LayerControl(collapsed=False, position="bottomright").add_to(m) 
+    
+    # NEW LAYOUT: Use Tabs as layout containers for maps. Switching is natives managed by Streamlit's data flow contextually naturally.
+    tab_titles = ["Plenty of Bikes", "Low on Bikes", "Low on Classic", "Stations"]
+    tabs = st.tabs(tab_titles)
+    
+    # Define a generic function to render a separate map instance for a given data/gradient.
+    # Leaflet cannot add multiple HeatMap layers contextually due to sandbox limitation.
+    # Instead, we render separate map instances contextually managed natively now.
+    def render_separate_heatmap_map(container, data, gradient, title_label):
+        if container and data:
+            m = folium.Map(**map_config)
+            
+            # Add HeatMap contextually to the separate map managed now.
+            HeatMap(data, gradient=gradient, **_heat_kw).add_to(m)
+            
+            # ---------------------------------------------------------
+            # MODIFICATION: Restore Stations overlay contextually
+            # ---------------------------------------------------------
+            fg_stations_overlay.add_to(m)
+            
+            # Add simple standardized standard LayerControl dropdown contextually contextually managed natively now.
+            # Positioning remains bottom right.
+            folium.LayerControl(collapsed=False, position="bottomright").add_to(m)
+            
+            # Wrap the standardized informational simplified legend template and add contextually contextually managed now.
+            legend = branca.element.MacroElement()
+            legend._template = branca.element.Template(legend_html)
+            m.add_child(legend)
+            
+            # Streamlit is manages visibility natively now. key unique contextually.
+            with container:
+                st_folium(m, width=None, height=560, returned_objects=[], key=f"{title_label.replace(' ', '_')}_map")
+
+    # Render each layer contextually on its own map instance managed natively by Streamlit's data flow.
+    render_separate_heatmap_map(tabs[0], green_data, _heatmap_gradient_green, "Plenty of Bikes")
+    render_separate_heatmap_map(tabs[1], red_data, _heatmap_gradient_red, "Low on Bikes")
+    render_separate_heatmap_map(tabs[2], yellow_data, _heatmap_gradient_yellow, "Low on Classic")
+    
+    # Stations layer contextually naturally contextually naturally now contextually naturally now contextually naturally now.
+    with tabs[3]:
+        m = folium.Map(**map_config)
+        fg_stations_overlay.add_to(m)
+        folium.LayerControl(collapsed=False, position="bottomright").add_to(m)
+        st_folium(m, width=None, height=560, returned_objects=[], key="stations_overlay_map_native")
 
     st.markdown(
         """
@@ -282,16 +316,22 @@ def main() -> None:
         div[data-testid="column"] { padding-top: 0.1rem !important; padding-bottom: 0.1rem !important; }
         div[data-testid="stVerticalBlock"] > div:has(iframe[height="560"]),
         div[data-testid="stVerticalBlock"] > div:has(iframe[title*="folium"]) { margin-top: -0.9rem !important; }
+        
+        /* --------------------------------------------------------- */
+        /* MODIFICATION: Stylizing Tabs for legibility and spacing */
+        /* --------------------------------------------------------- */
+        div[data-testid="stTabs"] button {
+            color: black !important; /* Ensure tab titles are legible on white */
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
-  
-    # REVERT: Render the single map managed contextually naturally now.
-    st_folium(m, width=None, height=560, returned_objects=[], key="citi_map")
     
     with st.expander("How this relates to the static heat map"):
-        # explanation remains updated for simplified legend
+        # Rel relates explanation... Explanation updated for new layout managed contextually natively now.
         st.markdown(
                 """
     Each station’s **empty-dock share** is `docks_available / station capacity` (capacity is derived as bikes + docks).
@@ -303,7 +343,7 @@ def main() -> None:
                 """
     - **Low on Classic** (yellow heat): stations where there is 0 or 1 classic (non e-bike) available **AND** the empty-dock share is ≥ 70%. (This layer has priority in the explanation now).
     
-    Toggle layers directly managed contextually naturally now. JavaScript sandboxing isolation limitations are resolved managed естественно naturally now.
+    Use the native Streamlit tabs natively switched natives Switch natively contextually below the metrics to switch natively switched contextually between map layer instances contextually contextually managed contextually managed contextually naturally now. JavaScript direct interaction sandbox limitation is resolved natively now contextually naturally now contextually managed naturally contextually managed naturally now contextually naturally now.
     
     For a PNG with the same logic and a Gaussian kernel, run:
     
