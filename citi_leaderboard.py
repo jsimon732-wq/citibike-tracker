@@ -10,7 +10,7 @@ import os
 import csv
 import json
 
-TARGET_ID = "NS143"
+TARGET_ID = "PV758"
 CSV_PATH = os.path.join(os.path.dirname(__file__), "ns143_points.csv")
 
 
