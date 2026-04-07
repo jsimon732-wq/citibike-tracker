@@ -101,6 +101,45 @@ def main() -> None:
 
     green_data: list[list[float]] = []
     red_data: list[list[float]] = []
+
+  # 1. New data list for yellow points
+    yellow_data: list[list[float]] = [] 
+
+    for s in valid:
+        # (Existing logic to get weights and coordinates)
+        rw, gw = heat_red_green_weights(s)
+        lat, lon = float(s["latitude"]), float(s["longitude"])
+        if gw > 0:
+            green_data.append([lat, lon, max(0.35, gw)])
+        if rw > 0:
+            red_data.append([lat, lon, max(0.35, rw)])
+
+        # ---------------------------------------------------------
+        # 2. Add filtering logic for "Low on Classic" (Yellow)
+        # ---------------------------------------------------------
+        
+        # We need values that might not be in 's' for heat_red_green_weights
+        # but are used in the station markers.
+        bikes = int(s.get("bikes_available", 0) or 0)
+        ebikes = int(s.get("ebikes_available", 0) or 0)
+        docks = int(s.get("docks_available", 0) or 0)
+        
+        # Calculate derived metrics
+        classic_bikes = bikes - ebikes
+        capacity = bikes + docks
+        
+        if capacity > 0:
+            dock_share = docks / capacity
+            
+            # Condition A: classic bikes 0 or 1
+            low_classic = (classic_bikes <= 1)
+            # Condition B: empty-dock share >= 70%
+            high_empty = (dock_share >= 0.70)
+            
+            if low_classic and high_empty:
+                # Use dock_share as the intensity weight for the heatmap,
+                # ensuring it's at least 0.35 for visibility.
+                yellow_data.append([lat, lon, max(0.35, dock_share)])
     for s in valid:
         rw, gw = heat_red_green_weights(s)
         lat, lon = float(s["latitude"]), float(s["longitude"])
@@ -137,10 +176,23 @@ def main() -> None:
             **_heat_kw,
         ).add_to(fg_red)
         fg_red.add_to(m)
+    
+    if yellow_data:
+        fg_yellow = folium.FeatureGroup(
+            name="Low on Classic", show=True # Make it visible by default
+        )
+        HeatMap(
+            yellow_data,
+            # Yellow gradient: starting dark yellow/orange, fading to bright yellow
+            gradient={0.25: "#887700", 0.5: "#ccaa11", 0.75: "#ffee44", 1: "#ffffaa"},
+            **_heat_kw,
+        ).add_to(fg_yellow)
+        fg_yellow.add_to(m)
 
-    if not green_data and not red_data:
+    # Update the warning if no data at all
+    if not green_data and not red_data and not yellow_data:
         st.warning(
-            "No stations in the extreme bands (≤30% or ≥70% empty-dock share); widen thresholds or try later."
+            "No stations in the extreme bands (≤30% or ≥70% empty-dock share, or with Low Classic Bikes); widen thresholds or try later."
         )
 
     fg_stations = folium.FeatureGroup(name="Stations (click for availability)", show=False)
@@ -190,24 +242,28 @@ def main() -> None:
         """,
         unsafe_allow_html=True,
     )
+  
     st_folium(m, width=None, height=560, returned_objects=[], key="citi_map")
-
-    with st.expander("How this relates to the static heat map"):
-        st.markdown(
-            """
-Each station’s **empty-dock share** is `docks_available / station capacity` (capacity comes from GBFS; if missing we use bikes + docks as the total).
-
-- **Plenty of Bikes** (green heat): share ≤ 30% (few empty docks → lots of bikes parked).
-- **Low on Bikes** (red heat): share ≥ 70% (many empty docks → few bikes).
-- **Orange**: browser blend where both kinds of stations sit close together.
-
-Toggle layers on the map. For a PNG with the same logic and a Gaussian kernel, run:
-
-`python citi_bike_scraper.py --heatmap out.png`
-"""
-        )
-
-    st_autorefresh(interval=REFRESH_MS, key="citi_refresh")
+    
+        with st.expander("How this relates to the static heat map"):
+            st.markdown(
+                """
+    Each station’s **empty-dock share** is `docks_available / station capacity` (capacity is derived as bikes + docks).
+    
+    - **Plenty of Bikes** (green heat): share ≤ 30% (few empty docks → lots of bikes parked).
+    - **Low on Bikes** (red heat): share ≥ 70% (many empty docks → few bikes).
+    - **Orange**: browser blend where both kinds of stations sit close together.
+    """
+                """
+    - **Low on Classic** (yellow heat): stations where there is 0 or 1 classic (non e-bike) available **AND** the empty-dock share is ≥ 70%. (This layer has priority in the explanation now).
+    
+    Toggle layers on the map. For a PNG with the same logic and a Gaussian kernel, run:
+    
+    `python citi_bike_scraper.py --heatmap out.png`
+    """
+            )
+    
+        st_autorefresh(interval=REFRESH_MS, key="citi_refresh")
 
 
 if __name__ == "__main__":
