@@ -26,10 +26,6 @@ def snapshot_pv758():
     except ImportError:
         in_streamlit = False
 
-    # DEBUG: see which secrets are available
-    if in_streamlit:
-        st.write("DEBUG: Secrets available:", list(st.secrets.keys()))
-
     # --- Streamlit Cloud: use Google Sheets ---
     if in_streamlit and "GOOGLE_CREDENTIALS_JSON" in st.secrets:
         try:
@@ -41,10 +37,12 @@ def snapshot_pv758():
             ws = sh.sheet1
             rows = ws.get_all_records()
 
+            # Search from the most recent rows first
             for row in reversed(rows):
-                if row.get("id") == TARGET_ID:
+                row_id = str(row.get("id", "")).strip()
+                if row_id == TARGET_ID:
                     class LB:
-                        rank = row.get("rank")
+                        rank = int(row.get("rank"))
                         points = int(row.get("points", 0))
                         points_behind_first = 0
                         fetched_at = f"{row.get('date')} {row.get('time')}"
@@ -59,9 +57,10 @@ def snapshot_pv758():
             with open(CSV_PATH, newline="") as f:
                 reader = list(csv.DictReader(f))
                 for row in reversed(reader):
-                    if row.get("id") == TARGET_ID:
+                    row_id = str(row.get("id", "")).strip()
+                    if row_id == TARGET_ID:
                         class LB:
-                            rank = row.get("rank")
+                            rank = int(row.get("rank"))
                             points = int(row.get("points", 0))
                             points_behind_first = 0
                             fetched_at = f"{row.get('date')} {row.get('time')}"
