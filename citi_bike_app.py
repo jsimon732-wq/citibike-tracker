@@ -44,7 +44,7 @@ def main() -> None:
         unsafe_allow_html=True,
     )
     st.markdown(
-        '<p style="font-size: 0.875rem; color: #e4e4e4; margin: 0 0 0.05rem 0;">'
+        '<p style="font-size: 1.275rem; color: #e4e4e4; margin: 0 0 0.05rem 0;">'
         "Map refreshes every minute.</p>",
         unsafe_allow_html=True,
     )
