@@ -1,0 +1,29 @@
+name: Citibike Scraper
+
+on:
+  schedule:
+    - cron: '5,35 * * * *'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4 gspread
+
+      - name: Write credentials file
+        run: echo '${{ secrets.GOOGLE_CREDENTIALS }}' > /tmp/citibike_credentials.json
+
+      - name: Run scraper
+        run: python citibike_leaderboard_scraper.py
+        env:
+          GOOGLE_CREDENTIALS_PATH: /tmp/citibike_credentials.json
+          SHEET_ID: ${{ secrets.SHEET_ID }}
