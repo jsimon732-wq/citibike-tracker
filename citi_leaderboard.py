@@ -26,6 +26,10 @@ def snapshot_pv758():
     except ImportError:
         in_streamlit = False
 
+    # DEBUG: see which secrets are available
+    if in_streamlit:
+        st.write("DEBUG: Secrets available:", list(st.secrets.keys()))
+
     # --- Streamlit Cloud: use Google Sheets ---
     if in_streamlit and "GOOGLE_CREDENTIALS_JSON" in st.secrets:
         try:
