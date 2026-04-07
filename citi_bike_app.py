@@ -245,8 +245,8 @@ def main() -> None:
   
     st_folium(m, width=None, height=560, returned_objects=[], key="citi_map")
     
-        with st.expander("How this relates to the static heat map"):
-            st.markdown(
+    with st.expander("How this relates to the static heat map"):
+        st.markdown(
                 """
     Each station’s **empty-dock share** is `docks_available / station capacity` (capacity is derived as bikes + docks).
     
