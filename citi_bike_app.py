@@ -35,7 +35,7 @@ def main() -> None:
 
     from citi_bike_scraper import heat_red_green_weights, scrape_availability
 
-    REFRESH_MS = 30_000
+    REFRESH_MS = 60_000
 
     st.set_page_config(page_title="Ride on PV758", layout="wide")
     st.markdown(
@@ -45,7 +45,7 @@ def main() -> None:
     )
     st.markdown(
         '<p style="font-size: 0.875rem; color: #e4e4e4; margin: 0 0 0.05rem 0;">'
-        "Map refreshes every 30 seconds. Pan and zoom freely.</p>",
+        "Map refreshes every minute. Pan and zoom freely.</p>",
         unsafe_allow_html=True,
     )
 
