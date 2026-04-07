@@ -18,7 +18,13 @@ from __future__ import annotations
 import html
 import sys
 import urllib.error
-
+# ---------------------------------------------------------
+# FIX START: ADD MISSING IMPORT
+# ---------------------------------------------------------
+import streamlit as st 
+# ---------------------------------------------------------
+# FIX END
+# ---------------------------------------------------------
 
 def _running_in_streamlit() -> bool:
     """True when this script is executed by `streamlit run`, not `python ...`."""
@@ -44,7 +50,9 @@ def main() -> None:
     # Change refresh to 1 minute (60,000 ms)
     REFRESH_MS = 60_000
 
+    # set_page_config MUST be the first Streamlit command
     st.set_page_config(page_title="Ride on PV758", layout="wide")
+    
     st.markdown(
         '<p style="font-size: 2.75rem; font-weight: 700; margin-top: -0.85rem; '
         "margin-bottom: 0.4rem; line-height: 1.15;\">Ride on PV758</p>",
